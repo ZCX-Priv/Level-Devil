@@ -23,7 +23,6 @@ Level Devil/
     ├── LevelDevil.wasm # WASM 性能优化核心
     ├── LevelDevil_wasm.js
     ├── dmloader.js     # Defold 引擎加载器
-    ├── main.js
     ├── sdk.js          # Poki SDK
     └── archive/        # 游戏资源包
 ```
@@ -36,14 +35,6 @@ Level Devil/
 | 1.1.2 | Defold (WASM) | 增强更新版，WebAssembly 性能优化，更流畅的游戏体验 |
 
 ## 快速开始
-
-1. 直接在浏览器中打开项目根目录下的 `index.html`
-2. 在主页中选择想要体验的版本（经典版或增强版）
-3. 点击「开始游戏」即可进入对应版本
-
-> 注意：由于浏览器的安全策略，建议通过本地 Web 服务器运行本项目，而不是直接双击打开 HTML 文件。
-
-## 本地服务器运行方式
 
 如果你已经安装了 Python，可以在项目目录下运行：
 
