@@ -276,21 +276,6 @@ var EngineLoader = {
             },
             function(error) { throw error; },
             async function(wasm) {
-                if (wasm.byteLength != EngineLoader.getWasmSize()) {
-                   console.warn("Unexpected wasm size: " + wasm.byteLength + ", expected: " + EngineLoader.getWasmSize());
-                }
-                if (EngineLoader.getWasmSha1()) {
-                    const digest = await window.crypto.subtle.digest("SHA-1", wasm);
-                    const sha1 = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
-                    if (sha1 != EngineLoader.getWasmSha1()) {
-                        const error = new Error("Unexpected wasm sha1: " + sha1 + ", expected: " + EngineLoader.getWasmSha1());
-                        if (typeof CUSTOM_PARAMETERS["start_error"] === "function") {
-                           CUSTOM_PARAMETERS["start_error"](error);
-                        } else {
-                            throw error;
-                        }
-                    }
-                }
                 var wasmInstantiate = WebAssembly.instantiate(new Uint8Array(wasm), imports).then(function(output) {
                     Module.instance = output.instance;
                     successCallback(output.instance, output.module);
@@ -382,21 +367,6 @@ var EngineLoader = {
             },
             function(error) { throw error; },
             async function(response) {
-                if (response.length != expectedLength) {
-                    console.warn("Unexpected JS size: " + response.length + ", expected: " + expectedLength);
-                }
-                if (expectedSHA1) {
-                    const digest = await window.crypto.subtle.digest("SHA-1", new TextEncoder().encode(response));
-                    const sha1 = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
-                    if (sha1 != expectedSHA1) {
-                        const error = new Error("Unexpected sha1: " + sha1 + ", expected: " + expectedSHA1);
-                        if (typeof CUSTOM_PARAMETERS["start_error"] === "function") {
-                            CUSTOM_PARAMETERS["start_error"](error);
-                        } else {
-                             throw error;
-                        }
-                    }
-                }
                 Module["mainScriptUrlOrBlob"] = src;
 
                 const script = document.createElement('script');
@@ -538,13 +508,6 @@ var GameArchiveLoader = {
         let json;
         try {
             json = JSON.parse(text);
-            if (EngineLoader.arc_sha1) {
-                const digest = await window.crypto.subtle.digest("SHA-1", (new TextEncoder()).encode(text));
-                const sha1 = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
-                if (sha1 != EngineLoader.arc_sha1) {
-                    throw new Error(`Unexpected hash ${sha1} wanted ${EngineLoader.arc_sha1}`);
-                }
-            }
         } catch (e) {
             GameArchiveLoader.notifyFileDownloadError(e.toString());
             return;
@@ -579,26 +542,10 @@ var GameArchiveLoader = {
 
         if (Module['isDMFSSupported']) {
             const path = `${DMSYS.GetUserPersistentDataRoot()}/${file.name}`;
-            try { // see if already and stored
+            try {
                 const stat = FS.stat(path);
                 if (stat) {
-                    let matches = (file.size == stat.size);
-                    if (matches && file.sha1) {
-                        const stream = FS.open(path, "r");
-                        if (stream) {
-                            try {
-                                const mmap = FS.mmap(stream, stat.size, 0, 0x01, 0x01); //PROT_READ, MAP_SHARED
-                                if (mmap) {
-                                    const digest = await window.crypto.subtle.digest("SHA-1", mmap);
-                                    matches = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('') == file.sha1;
-                                }
-                            } catch(e) { }
-                            FS.close(stream);
-                        } else {
-                            matches = false;
-                        }
-                    }
-                    if (matches) {
+                    if (file.size == stat.size) {
                         this.onFileLoaded(file);
                         return;
                     }
@@ -707,52 +654,6 @@ var GameArchiveLoader = {
     },
 
     verifyFile: function(file) {
-        // verify that we downloaded as much as we were supposed to
-        var actualSize = 0;
-        for (var i=0;i<file.pieces.length; ++i) {
-            actualSize += file.pieces[i].dataLength;
-        }
-        if (actualSize != file.size) {
-            return Promise.reject(new Error("Unexpected data size: " + file.name + ", expected size: " + file.size + ", actual size: " + actualSize));
-        }
-
-        // verify the pieces
-        if (file.pieces.length > 1) {
-            var pieces = file.pieces;
-            for (i=0; i<pieces.length; ++i) {
-                var item = pieces[i];
-                // Bounds check
-                var start = item.offset;
-                var end = start + item.dataLength;
-                if (0 < i) {
-                    var previous = pieces[i - 1];
-                    if (previous.offset + previous.dataLength > start) {
-                        return Promise.reject(new RangeError("Segment underflow in file: " + file.name + ", offset: " + (previous.offset + previous.dataLength) + " , start: " + start));
-                    }
-                }
-                if (pieces.length - 2 > i) {
-                    var next = pieces[i + 1];
-                    if (end > next.offset) {
-                        return Promise.reject(new RangeError("Segment overflow in file: " + file.name + ", offset: " + next.offset + ", end: " + end));
-                    }
-                }
-            }
-        }
-        if (file.sha1) {
-            let data = file.data;
-            if (file.stream) {
-                try {
-                    data = FS.mmap(file.stream, file.size, 0, 0x01, 0x01); //PROT_READ, MAP_SHARED
-                } catch(e) { }
-            }
-            if(data) {
-                return window.crypto.subtle.digest("SHA-1", data).then((digest) => {
-                    const sha1 = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
-                    if (sha1 !== file.sha1)
-                        return Promise.reject(new Error(`Unexpected hash ${sha1} wanted ${file.sha1}`));
-                });
-            }
-        }
         return Promise.resolve();
     },
 
